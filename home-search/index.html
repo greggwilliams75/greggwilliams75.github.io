@@ -194,7 +194,14 @@
   .checkbox-item input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--pine); cursor: pointer; }
 
   /* COMPARE */
-  .compare-wrap { overflow-x: auto; }
+  .corrections-panel {
+    margin-top: 14px; padding: 14px; border-radius: 8px;
+    background: #fffbf0; border: 1px solid #e8d89a;
+  }
+  .corrections-title { font-size: 0.78rem; font-weight: 600; color: #8a6820; margin-bottom: 4px; }
+  .corrections-hint { font-size: 0.72rem; color: var(--ash); margin-bottom: 10px; }
+  .corrections-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  @media (max-width: 680px) { .corrections-grid { grid-template-columns: 1fr; } }
   .compare-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; white-space: nowrap; }
   .compare-table th { text-align: left; padding: 8px 10px; background: var(--paper); font-weight: 600; color: var(--ash); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; }
   .compare-table td { padding: 9px 10px; border-bottom: 1px solid #e0ddd7; vertical-align: middle; }
@@ -622,64 +629,13 @@ async function analyzeHome() {
   const mustHaveLabels = state.mustHave.map(id => MUST_HAVE_OPTIONS.find(o=>o.id===id)?.label || id);
   const bonusLabels = state.bonusWanted.map(id => BONUS_OPTIONS.find(o=>o.id===id)?.label || id);
 
+  const prompt = buildScoringPrompt(criteriaDesc, mustHaveLabels, bonusLabels);
+
   const listingInput = [
     cleanUrl ? `Listing URL: ${cleanUrl}` : '',
     fetchedContent ? `\nFetched page content:\n${fetchedContent}` : '',
     text ? `\nUser-provided details:\n${text}` : '',
   ].filter(Boolean).join('\n');
-
-  const prompt = `You are an expert real estate analyst helping a buyer find a home in or near Missoula, Montana.
-
-BUYER REQUIREMENTS:
-- Price range: $${state.priceMin || '600000'} – $${state.priceMax || '1400000'}
-- Minimum square footage: ${state.minSqft || '3500'} sqft
-- Minimum lot size: ${state.minLot || '1 acre'}
-- Must be within ${state.maxDist || '30 miles'} of Missoula, MT
-${mustHaveLabels.length ? `- MUST-HAVE features: ${mustHaveLabels.join(', ')}` : ''}
-${bonusLabels.length ? `- Highly desirable (bonus): ${bonusLabels.join(', ')}` : ''}
-${state.customNotes ? `- Additional notes: ${state.customNotes}` : ''}
-
-SCORING WEIGHTS (each criterion scored 0–10, then weighted):
-${criteriaDesc}
-
-For the "basement" criterion, score based on completeness: 2nd kitchen + direct outdoor access + family room + bathroom + bedroom = full 10. Each missing element deducts ~2 points.
-For "cottage", score 10 if standalone guest cottage present, 0 if absent.
-For "price", score 10 if well under max budget and great value, lower if at/over budget.
-For "location", score 10 if within 10 miles of Missoula downtown, 7 if 10-20mi, 4 if 20-30mi, 1 if over 30mi.
-
-LISTING TO ANALYZE:
-${listingInput}
-
-If the URL was provided but content is thin, use your knowledge of the listing if you recognize it, or note what could not be verified.
-
-Return ONLY valid JSON (no markdown, no preamble, no trailing text):
-{
-  "address": "full address",
-  "price": "$xxx,xxx",
-  "sqft": "x,xxx sqft",
-  "lot": "x.xx acres",
-  "beds": "x bed / x bath",
-  "year": "built xxxx",
-  "overall": 74,
-  "breakdown": {
-    "price": 7,
-    "lot": 6,
-    "location": 8,
-    "sqft": 5,
-    "basement": 9,
-    "cottage": 0,
-    "beds": 7,
-    "condition": 6,
-    "garage": 4,
-    "features": 5
-  },
-  "mustHaveMet": ["basement_kitchen", "basement_bath"],
-  "mustHaveMissing": ["basement_outdoor"],
-  "bonusPresent": ["guest_cottage"],
-  "pros": ["pro 1", "pro 2", "pro 3"],
-  "cons": ["con 1", "con 2"],
-  "summary": "2-3 sentences assessing this home for the buyer."
-}`;
 
   try {
     const useWebSearch = !fetchedContent && cleanUrl;
@@ -857,9 +813,39 @@ function renderResult(home, container) {
 
     <div class="summary-text">${home.summary}</div>
 
+    <!-- CORRECTIONS PANEL -->
+    <div class="corrections-panel" id="corrections_${home.id}" style="display:none">
+      <div class="corrections-title">⚠ Correct listing data before re-scoring</div>
+      <div class="corrections-hint">Override any fields Claude got wrong. Leave blank to keep original.</div>
+      <div class="corrections-grid">
+        <div class="field-group">
+          <label>Price</label>
+          <input type="text" id="cor_price_${home.id}" placeholder="${home.price || 'e.g. $1,250,000'}" />
+        </div>
+        <div class="field-group">
+          <label>Sq Ft</label>
+          <input type="text" id="cor_sqft_${home.id}" placeholder="${home.sqft || 'e.g. 9,227 sqft'}" />
+        </div>
+        <div class="field-group">
+          <label>Lot Size</label>
+          <input type="text" id="cor_lot_${home.id}" placeholder="${home.lot || 'e.g. 2.8 acres'}" />
+        </div>
+        <div class="field-group">
+          <label>Beds / Baths</label>
+          <input type="text" id="cor_beds_${home.id}" placeholder="${home.beds || 'e.g. 9 bed / 8.5 bath'}" />
+        </div>
+      </div>
+      <div class="field-group" style="margin-top:8px">
+        <label>Additional corrections / notes for Claude</label>
+        <textarea id="cor_notes_${home.id}" style="width:100%;padding:7px 10px;border:1px solid #d4d1cb;border-radius:6px;font-family:Inter,sans-serif;font-size:0.8rem;min-height:55px;background:var(--paper);" placeholder="e.g. Has full basement suite with 2nd kitchen and outdoor access, guest cottage on property"></textarea>
+      </div>
+      <button class="btn btn-green btn-sm" style="margin-top:10px;width:100%" onclick="reAnalyze('${home.id}')">Re-score with corrections →</button>
+    </div>
+
     <div class="result-actions">
-      <button class="btn btn-danger btn-sm" onclick="deleteHome('${home.id}')">Remove listing</button>
-      ${home.url ? `<a href="${home.url}" target="_blank">↗ View original listing</a>` : ''}
+      <button class="btn btn-danger btn-sm" onclick="deleteHome('${home.id}')">Remove</button>
+      <button class="btn btn-sm" style="border:1px solid #d4d1cb;color:var(--ink);background:transparent" onclick="toggleCorrections('${home.id}')">✏ Fix data</button>
+      ${home.url ? `<a href="${home.url}" target="_blank" style="margin-left:auto">↗ Listing</a>` : ''}
     </div>
   </div>`;
 
@@ -873,7 +859,146 @@ function renderResult(home, container) {
   });
 }
 
-// ── DRAWER ─────────────────────────────────────────────────────────────
+// ── CORRECTIONS & RE-ANALYZE ───────────────────────────────────────────
+function toggleCorrections(id) {
+  const el = document.getElementById(`corrections_${id}`);
+  if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+async function reAnalyze(id) {
+  const home = state.homes.find(h => h.id === id);
+  if (!home) return;
+
+  const corPrice = document.getElementById(`cor_price_${id}`)?.value.trim();
+  const corSqft  = document.getElementById(`cor_sqft_${id}`)?.value.trim();
+  const corLot   = document.getElementById(`cor_lot_${id}`)?.value.trim();
+  const corBeds  = document.getElementById(`cor_beds_${id}`)?.value.trim();
+  const corNotes = document.getElementById(`cor_notes_${id}`)?.value.trim();
+
+  const corrections = [
+    corPrice ? `Price: ${corPrice}` : '',
+    corSqft  ? `Square footage: ${corSqft}` : '',
+    corLot   ? `Lot size: ${corLot}` : '',
+    corBeds  ? `Beds/baths: ${corBeds}` : '',
+    corNotes ? `Additional info: ${corNotes}` : '',
+  ].filter(Boolean).join('\n');
+
+  if (!corrections) { alert('Enter at least one correction first.'); return; }
+
+  const resultArea = document.getElementById('resultArea');
+  resultArea.innerHTML = `<div class="loading"><div class="spinner"></div><span>Re-scoring with corrections…</span></div>`;
+
+  const total = state.criteria.reduce((s,c) => s + c.weight, 0);
+  const criteriaDesc = state.criteria.filter(c => c.weight > 0)
+    .sort((a,b) => b.weight - a.weight)
+    .map(c => `- ${c.label}: weight ${c.weight}/10 (${Math.round(c.weight/total*100)}% of score)`)
+    .join('\n');
+  const mustHaveLabels = state.mustHave.map(id2 => MUST_HAVE_OPTIONS.find(o=>o.id===id2)?.label || id2);
+  const bonusLabels = state.bonusWanted.map(id2 => BONUS_OPTIONS.find(o=>o.id===id2)?.label || id2);
+
+  const prompt = buildScoringPrompt(criteriaDesc, mustHaveLabels, bonusLabels);
+
+  const originalData = `Original listing data (may contain errors from web search):
+Address: ${home.address}
+Price: ${home.price}
+Sqft: ${home.sqft}
+Lot: ${home.lot}
+Beds: ${home.beds}
+Year: ${home.year}
+URL: ${home.url}
+
+CORRECTIONS (use these instead — they are verified by the user):
+${corrections}`;
+
+  try {
+    const apiKey = await getOrPromptApiKey();
+    const headers = {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    };
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST', headers,
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 2000,
+        messages: [{ role: 'user', content: prompt + '\n\n' + originalData }],
+      }),
+    });
+    const data = await resp.json();
+    let raw = '';
+    if (Array.isArray(data.content)) {
+      for (const block of data.content) { if (block.type === 'text') raw += block.text; }
+    }
+    const jsonMatch = raw.replace(/```json|```/g,'').match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('No JSON in response');
+    const result = JSON.parse(jsonMatch[0]);
+
+    // Update the saved home in place
+    home.score = result.overall || home.score;
+    home.breakdown = result.breakdown || home.breakdown;
+    home.mustHaveMet = result.mustHaveMet || home.mustHaveMet;
+    home.mustHaveMissing = result.mustHaveMissing || home.mustHaveMissing;
+    home.bonusPresent = result.bonusPresent || home.bonusPresent;
+    home.pros = result.pros || home.pros;
+    home.cons = result.cons || home.cons;
+    home.summary = result.summary || home.summary;
+    if (corPrice) home.price = corPrice;
+    if (corSqft)  home.sqft  = corSqft;
+    if (corLot)   home.lot   = corLot;
+    if (corBeds)  home.beds  = corBeds;
+    if (result.address && result.address !== 'full address') home.address = result.address;
+
+    saveState();
+    renderSavedList();
+    renderResult(home, resultArea);
+
+  } catch(e) {
+    resultArea.innerHTML = `<div class="result-card"><p style="color:var(--red);font-weight:600">Re-score failed.</p><p style="font-size:0.8rem;color:var(--ash)">${e.message}</p></div>`;
+  }
+}
+
+function buildScoringPrompt(criteriaDesc, mustHaveLabels, bonusLabels) {
+  return `You are an expert real estate analyst helping a buyer find a home in or near Missoula, Montana.
+
+BUYER REQUIREMENTS:
+- Price range: $${state.priceMin || '600000'} – $${state.priceMax || '1400000'}
+- Minimum square footage: ${state.minSqft || '3500'} sqft
+- Minimum lot size: ${state.minLot || '1 acre'}
+- Must be within ${state.maxDist || '30 miles'} of Missoula, MT
+${mustHaveLabels.length ? `- MUST-HAVE features: ${mustHaveLabels.join(', ')}` : ''}
+${bonusLabels.length ? `- Highly desirable (bonus): ${bonusLabels.join(', ')}` : ''}
+${state.customNotes ? `- Additional notes: ${state.customNotes}` : ''}
+
+IMPORTANT: User-provided corrections always override web search data. Real estate sites frequently show stale or historical prices. Always use the most current verified price when scoring.
+
+SCORING WEIGHTS (each criterion scored 0–10, then weighted):
+${criteriaDesc}
+
+For the "basement" criterion: 2nd kitchen + direct outdoor access + family room + bathroom + bedroom = 10. Each missing element deducts ~2 points.
+For "cottage": score 10 if standalone guest cottage present, 0 if absent.
+For "price": score 10 if well under max budget, lower if at/over budget.
+For "location": score 10 if within 10 miles of Missoula, 7 if 10-20mi, 4 if 20-30mi, 1 if over 30mi.
+
+Return ONLY valid JSON (no markdown, no preamble):
+{
+  "address": "full address",
+  "price": "$xxx,xxx",
+  "sqft": "x,xxx sqft",
+  "lot": "x.xx acres",
+  "beds": "x bed / x bath",
+  "year": "built xxxx",
+  "overall": 74,
+  "breakdown": {"price":7,"lot":6,"location":8,"sqft":5,"basement":9,"cottage":0,"beds":7,"condition":6,"garage":4,"features":5},
+  "mustHaveMet": ["basement_kitchen"],
+  "mustHaveMissing": ["basement_outdoor"],
+  "bonusPresent": ["guest_cottage"],
+  "pros": ["pro 1","pro 2","pro 3"],
+  "cons": ["con 1","con 2"],
+  "summary": "2-3 sentence assessment."
+}`;
+}
 function openDrawer() {
   document.getElementById('drawer').classList.add('open');
   document.getElementById('drawerOverlay').classList.add('open');
