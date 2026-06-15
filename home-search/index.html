@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Home Ranker — Missoula</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root {
+    --forest: #1e3a2f;
+    --pine: #2d5a42;
+    --sage: #7a9e85;
+    --mist: #c8dccf;
+    --paper: #f5f2ed;
+    --ink: #1a1a18;
+    --ash: #6b7067;
+    --gold: #c49a3c;
+    --red: #b34a3a;
+    --white: #ffffff;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', sans-serif; background: var(--paper); color: var(--ink); min-height: 100vh; }
+
+  header {
+    background: var(--forest); color: var(--white);
+    padding: 18px 28px; display: flex; align-items: center; justify-content: space-between;
+  }
+  .logo { display: flex; align-items: baseline; gap: 10px; }
+  .hamburger { display: none; background: none; border: 1px solid rgba(255,255,255,0.35); color: var(--white); font-size: 1.1rem; width: 36px; height: 36px; border-radius: 6px; cursor: pointer; align-items: center; justify-content: center; flex-shrink: 0; }
+  @media (max-width: 680px) { .hamburger { display: flex; } .logo span { display: none; } }
+  .logo h1 { font-family: 'DM Serif Display', serif; font-size: 1.5rem; letter-spacing: -0.02em; }
+  .logo span { font-size: 0.72rem; font-weight: 400; color: var(--mist); letter-spacing: 0.08em; text-transform: uppercase; }
+  .header-actions { display: flex; gap: 8px; }
+
+  .btn { font-family: 'Inter', sans-serif; font-size: 0.8rem; font-weight: 500; padding: 7px 14px; border-radius: 6px; cursor: pointer; border: none; transition: all 0.15s; }
+  .btn-outline { background: transparent; border: 1px solid rgba(255,255,255,0.35); color: var(--white); }
+  .btn-outline:hover { background: rgba(255,255,255,0.1); }
+  .btn-gold { background: var(--gold); color: var(--white); }
+  .btn-gold:hover { background: #b8882e; }
+  .btn-green { background: var(--pine); color: var(--white); }
+  .btn-green:hover { background: #234733; }
+  .btn-danger { background: transparent; border: 1px solid var(--red); color: var(--red); font-size: 0.75rem; padding: 5px 10px; }
+  .btn-danger:hover { background: var(--red); color: white; }
+  .btn-sm { padding: 5px 10px; font-size: 0.75rem; }
+
+  /* LAYOUT — desktop sidebar, mobile drawer */
+  .app { display: grid; grid-template-columns: 290px 1fr; min-height: calc(100vh - 62px); }
+
+  /* SIDEBAR — desktop */
+  .sidebar { background: var(--white); border-right: 1px solid #e0ddd7; display: flex; flex-direction: column; }
+  .sidebar-section { padding: 16px; border-bottom: 1px solid #e0ddd7; }
+  .sidebar-label { font-size: 0.67rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ash); margin-bottom: 10px; }
+
+  .saved-list { flex: 1; overflow-y: auto; padding: 10px; }
+  .saved-item { padding: 11px; border-radius: 8px; border: 1px solid #e0ddd7; margin-bottom: 7px; cursor: pointer; transition: all 0.15s; background: var(--paper); }
+  .saved-item:hover { border-color: var(--sage); }
+  .saved-item.active { border-color: var(--pine); background: #f0f6f2; }
+  .saved-item-name { font-size: 0.8rem; font-weight: 600; color: var(--ink); margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .saved-item-meta { font-size: 0.7rem; color: var(--ash); }
+  .saved-item-score { display: inline-block; margin-top: 5px; font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; font-weight: 500; padding: 2px 6px; border-radius: 4px; color: var(--white); }
+  .score-high { background: var(--pine); }
+  .score-mid { background: var(--gold); }
+  .score-low { background: var(--red); }
+  .empty-state { text-align: center; padding: 28px 14px; color: var(--ash); font-size: 0.8rem; line-height: 1.6; }
+
+  .main { padding: 24px 28px; overflow-y: auto; }
+
+  /* MOBILE DRAWER */
+  .drawer-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 200;
+  }
+  .drawer-overlay.open { display: block; }
+  .drawer {
+    position: fixed; top: 0; left: 0; bottom: 0; width: 82vw; max-width: 320px;
+    background: var(--white); z-index: 201; display: flex; flex-direction: column;
+    transform: translateX(-100%); transition: transform 0.25s cubic-bezier(0.16,1,0.3,1);
+    overflow-y: auto;
+  }
+  .drawer.open { transform: translateX(0); }
+  .drawer-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px; background: var(--forest); color: var(--white); flex-shrink: 0;
+  }
+  .drawer-header h2 { font-family: 'DM Serif Display', serif; font-size: 1.1rem; }
+  .drawer-close { background: none; border: none; color: var(--white); font-size: 1.4rem; cursor: pointer; line-height: 1; padding: 4px 8px; }
+
+  /* MOBILE overrides */
+  @media (max-width: 680px) {
+    .app { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .main { padding: 16px; }
+    header { padding: 14px 16px; }
+    .logo h1 { font-size: 1.25rem; }
+    .field-row { flex-direction: column; }
+    .field-row button { width: 100%; }
+    .pros-cons { grid-template-columns: 1fr; }
+    .bar-row { grid-template-columns: 110px 1fr 32px; }
+    .grid-2 { grid-template-columns: 1fr; }
+    .checkbox-grid { grid-template-columns: 1fr; }
+  }
+
+  .tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid #e0ddd7; }
+  .tab { padding: 7px 14px; font-size: 0.8rem; font-weight: 500; color: var(--ash); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; background: none; border-top: none; border-left: none; border-right: none; font-family: 'Inter', sans-serif; transition: all 0.15s; }
+  .tab.active { color: var(--forest); border-bottom-color: var(--forest); }
+  .tab:hover { color: var(--ink); }
+
+  .input-card { background: var(--white); border-radius: 12px; border: 1px solid #e0ddd7; padding: 22px; margin-bottom: 20px; }
+  .input-card h2 { font-family: 'DM Serif Display', serif; font-size: 1.1rem; color: var(--forest); margin-bottom: 14px; }
+  .input-hint { font-size: 0.73rem; color: var(--ash); margin: -4px 0 10px; line-height: 1.5; }
+
+  .field-row { display: flex; gap: 8px; margin-bottom: 10px; }
+  .field-row input[type="text"], .field-row textarea {
+    flex: 1; padding: 9px 12px; border: 1px solid #d4d1cb; border-radius: 7px;
+    font-family: 'Inter', sans-serif; font-size: 0.83rem; color: var(--ink); background: var(--paper);
+  }
+  .field-row input:focus, .field-row textarea:focus { outline: 2px solid var(--pine); }
+  textarea { min-height: 75px; resize: vertical; }
+
+  .scrape-status { font-size: 0.75rem; padding: 6px 10px; border-radius: 5px; margin-bottom: 8px; display: none; }
+  .scrape-status.info { background: #e8f0ec; color: var(--pine); display: block; }
+  .scrape-status.warn { background: #fdf5e4; color: #8a6820; display: block; }
+
+  /* RESULT */
+  .result-card { background: var(--white); border-radius: 12px; border: 1px solid #e0ddd7; padding: 24px; margin-bottom: 20px; }
+  .result-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; gap: 14px; }
+  .result-title { font-family: 'DM Serif Display', serif; font-size: 1.3rem; color: var(--forest); margin-bottom: 3px; }
+  .result-meta { font-size: 0.78rem; color: var(--ash); line-height: 1.6; }
+  .score-badge { flex-shrink: 0; width: 68px; height: 68px; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--white); }
+  .score-badge .num { font-family: 'DM Serif Display', serif; font-size: 1.5rem; line-height: 1; }
+  .score-badge .lbl { font-size: 0.58rem; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.75; }
+
+  .flags-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+  .flag { font-size: 0.72rem; padding: 3px 9px; border-radius: 12px; font-weight: 500; }
+  .flag-meet { background: #e0f0e8; color: var(--pine); }
+  .flag-miss { background: #fde8e5; color: var(--red); }
+  .flag-bonus { background: #fef3d8; color: #8a6820; }
+
+  .score-bars { margin-bottom: 18px; }
+  .bar-row { display: grid; grid-template-columns: 148px 1fr 36px; align-items: center; gap: 10px; margin-bottom: 9px; }
+  .bar-label { font-size: 0.78rem; font-weight: 500; }
+  .bar-track { height: 7px; background: var(--mist); border-radius: 4px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 4px; width: 0%; transition: width 0.75s cubic-bezier(0.16,1,0.3,1); }
+  .bar-num { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: var(--ash); text-align: right; }
+
+  .pros-cons { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 18px; }
+  .pros, .cons { padding: 13px; border-radius: 8px; }
+  .pros { background: #f0f6f2; }
+  .cons { background: #fdf2f0; }
+  .pros-cons h4 { font-size: 0.7rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 7px; }
+  .pros h4 { color: var(--pine); }
+  .cons h4 { color: var(--red); }
+  .pros-cons ul { list-style: none; font-size: 0.8rem; line-height: 1.65; color: var(--ink); }
+  .pros-cons li::before { content: '→ '; opacity: 0.45; }
+
+  .summary-text { font-size: 0.83rem; line-height: 1.65; color: #3a3a38; border-top: 1px solid #e0ddd7; padding-top: 14px; }
+
+  .result-actions { display: flex; gap: 8px; margin-top: 14px; padding-top: 14px; border-top: 1px solid #e0ddd7; align-items: center; }
+  .result-actions a { font-size: 0.75rem; color: var(--pine); text-decoration: none; margin-left: auto; }
+  .result-actions a:hover { text-decoration: underline; }
+
+  .loading { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px; gap: 12px; color: var(--ash); font-size: 0.83rem; }
+  .spinner { width: 34px; height: 34px; border: 3px solid var(--mist); border-top-color: var(--pine); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-steps { font-size: 0.75rem; color: var(--sage); margin-top: 4px; }
+
+  /* MODAL */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 100; align-items: center; justify-content: center; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--white); border-radius: 14px; padding: 26px; width: 520px; max-width: 92vw; max-height: 88vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
+  .modal h3 { font-family: 'DM Serif Display', serif; font-size: 1.15rem; color: var(--forest); margin-bottom: 6px; }
+  .modal .sub { font-size: 0.78rem; color: var(--ash); margin-bottom: 16px; }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; }
+  .modal-section { margin-bottom: 18px; }
+  .modal-section-title { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ash); margin-bottom: 10px; border-top: 1px solid #e0ddd7; padding-top: 14px; }
+
+  .criterion { margin-bottom: 14px; }
+  .criterion-header { display: flex; justify-content: space-between; margin-bottom: 4px; }
+  .criterion-name { font-size: 0.8rem; font-weight: 500; }
+  .criterion-value { font-family: 'JetBrains Mono', monospace; font-size: 0.76rem; color: var(--pine); font-weight: 500; }
+  input[type="range"] { width: 100%; -webkit-appearance: none; height: 4px; border-radius: 2px; background: var(--mist); outline: none; }
+  input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 13px; height: 13px; border-radius: 50%; background: var(--pine); cursor: pointer; }
+  .criterion-bounds { display: flex; justify-content: space-between; font-size: 0.65rem; color: var(--ash); margin-top: 2px; }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .field-group { display: flex; flex-direction: column; gap: 4px; }
+  .field-group label { font-size: 0.73rem; font-weight: 500; color: var(--ash); }
+  .field-group input { padding: 7px 10px; border: 1px solid #d4d1cb; border-radius: 6px; font-family: 'Inter', sans-serif; font-size: 0.82rem; color: var(--ink); background: var(--paper); }
+  .field-group input:focus { outline: 2px solid var(--pine); }
+
+  .checkbox-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .checkbox-item { display: flex; align-items: center; gap: 7px; font-size: 0.8rem; cursor: pointer; }
+  .checkbox-item input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--pine); cursor: pointer; }
+
+  /* COMPARE */
+  .compare-wrap { overflow-x: auto; }
+  .compare-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; white-space: nowrap; }
+  .compare-table th { text-align: left; padding: 8px 10px; background: var(--paper); font-weight: 600; color: var(--ash); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  .compare-table td { padding: 9px 10px; border-bottom: 1px solid #e0ddd7; vertical-align: middle; }
+  .compare-table tr:hover td { background: #f8f6f2; }
+  .rank-num { font-family: 'DM Serif Display', serif; font-size: 1.05rem; color: var(--forest); }
+  .score-pill { display: inline-block; padding: 2px 7px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; font-weight: 500; color: white; }
+</style>
+</head>
+<body>
+
+<header>
+  <div style="display:flex;align-items:center;gap:12px">
+    <button class="hamburger" onclick="openDrawer()" aria-label="Saved listings">☰</button>
+    <div class="logo">
+      <h1>Home Ranker</h1>
+      <span class="logo-sub">Missoula, MT</span>
+    </div>
+  </div>
+  <div class="header-actions">
+    <span id="keyStatus" style="font-size:0.72rem;letter-spacing:0.04em;"></span>
+    <button class="btn btn-outline" onclick="openModal()">⚙ Criteria</button>
+  </div>
+</header>
+
+<!-- API KEY MODAL -->
+<div class="modal-overlay" id="apiKeyModal">
+  <div class="modal" style="max-width:400px">
+    <h3>Anthropic API Key</h3>
+    <p class="sub">Your key is stored only in your browser's localStorage — never in the code or sent anywhere except directly to Anthropic.</p>
+    <div style="margin-bottom:16px">
+      <input id="apiKeyInput" type="password" placeholder="sk-ant-..." style="width:100%;padding:9px 12px;border:1px solid #d4d1cb;border-radius:7px;font-family:monospace;font-size:0.85rem;background:var(--paper);" />
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn" style="border:1px solid #d4d1cb;color:var(--ink);background:transparent" onclick="document.getElementById('apiKeyModal').classList.remove('open')">Cancel</button>
+      <button class="btn btn-green" id="apiKeySave">Save Key</button>
+    </div>
+  </div>
+</div>
+
+<!-- MOBILE DRAWER -->
+<div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-header">
+    <h2>Saved Listings</h2>
+    <button class="drawer-close" onclick="closeDrawer()">✕</button>
+  </div>
+  <div style="padding:14px 16px;border-bottom:1px solid #e0ddd7;">
+    <div class="sidebar-label">Active Filters</div>
+    <div id="filterSummaryDrawer" style="font-size:0.76rem;color:var(--ash);line-height:1.8;"></div>
+  </div>
+  <div style="padding:10px 16px;border-bottom:1px solid #e0ddd7;">
+    <div class="sidebar-label">Listings (<span id="savedCountDrawer">0</span>)</div>
+  </div>
+  <div id="savedListDrawer" style="flex:1;overflow-y:auto;padding:10px;"></div>
+</div>
+
+<div class="app">
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Active Filters</div>
+      <div id="filterSummary" style="font-size:0.76rem;color:var(--ash);line-height:1.8;"></div>
+    </div>
+    <div class="sidebar-section" style="padding:12px 16px;">
+      <div class="sidebar-label">Saved Listings (<span id="savedCount">0</span>)</div>
+    </div>
+    <div class="saved-list" id="savedList">
+      <div class="empty-state">No listings yet.<br>Analyze a home to start ranking.</div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="tabs">
+      <button class="tab active" onclick="showTab('analyze')" id="tab-analyze">Analyze Home</button>
+      <button class="tab" onclick="showTab('compare')" id="tab-compare">Compare (<span id="compareCount">0</span>)</button>
+    </div>
+
+    <div id="panel-analyze">
+      <div class="input-card">
+        <h2>Add a listing</h2>
+        <div class="field-row">
+          <input type="text" id="listingUrl" placeholder="Paste a listing URL (Zillow, Realtor, Redfin…)" />
+        </div>
+        <div id="scrapeStatus" class="scrape-status"></div>
+        <p class="input-hint">Paste listing details below if the site blocks auto-fetch, or to add extra info.</p>
+        <div class="field-row">
+          <textarea id="listingText" placeholder="Address, price, sqft, lot size, beds/baths, basement details, features, description…"></textarea>
+        </div>
+        <div class="field-row">
+          <input type="text" id="listingName" placeholder='Short label, e.g. "4bd Rattlesnake w/ guest cottage"' />
+          <button class="btn btn-gold" onclick="analyzeHome()" style="white-space:nowrap">Analyze →</button>
+        </div>
+      </div>
+      <div id="resultArea"></div>
+    </div>
+
+    <div id="panel-compare" style="display:none;">
+      <div id="compareArea">
+        <div class="empty-state" style="padding:48px;text-align:center;">Save two or more homes to compare.</div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- CRITERIA MODAL -->
+<div class="modal-overlay" id="criteriaModal">
+  <div class="modal">
+    <h3>Criteria & Filters</h3>
+    <p class="sub">Set your must-haves, weights, and preferences. Claude uses all of this when scoring.</p>
+
+    <div class="modal-section">
+      <div class="modal-section-title" style="border-top:none;padding-top:0;">Budget & Minimums</div>
+      <div class="grid-2">
+        <div class="field-group">
+          <label>Min Price</label>
+          <input type="text" id="priceMin" placeholder="600000" />
+        </div>
+        <div class="field-group">
+          <label>Max Price</label>
+          <input type="text" id="priceMax" placeholder="1400000" />
+        </div>
+        <div class="field-group">
+          <label>Min Sq Ft</label>
+          <input type="text" id="minSqft" placeholder="3500" />
+        </div>
+        <div class="field-group">
+          <label>Min Lot Size</label>
+          <input type="text" id="minLot" placeholder="1 acre" />
+        </div>
+        <div class="field-group">
+          <label>Max Distance from Missoula</label>
+          <input type="text" id="maxDist" placeholder="30 miles" />
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-section">
+      <div class="modal-section-title">Must-Have Features</div>
+      <div class="checkbox-grid" id="mustHaveGrid"></div>
+    </div>
+
+    <div class="modal-section">
+      <div class="modal-section-title">Desirable Features (bonus points)</div>
+      <div class="checkbox-grid" id="bonusGrid"></div>
+    </div>
+
+    <div class="modal-section">
+      <div class="modal-section-title">Scoring Weights (0 = ignore, 10 = critical)</div>
+      <div id="criteriaSliders"></div>
+    </div>
+
+    <div class="modal-section">
+      <div class="modal-section-title">Additional Notes for Claude</div>
+      <textarea id="customNotes" style="width:100%;padding:8px 10px;border:1px solid #d4d1cb;border-radius:6px;font-family:Inter,sans-serif;font-size:0.82rem;min-height:60px;background:var(--paper);" placeholder='e.g. "Prefer west side of Missoula, single story preferred, need RV parking"'></textarea>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn" style="border:1px solid #d4d1cb;color:var(--ink);background:transparent;" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-green" onclick="saveModal()">Save Criteria</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── DEFAULTS ───────────────────────────────────────────────────────────
+const STORAGE_KEY = 'homeRanker_v2';
+
+const MUST_HAVE_OPTIONS = [
+  { id: 'basement_kitchen',  label: '2nd Kitchen in Basement' },
+  { id: 'basement_outdoor',  label: 'Basement Direct Outdoor Access' },
+  { id: 'basement_family',   label: 'Basement Family Room' },
+  { id: 'basement_bath',     label: 'Basement Bathroom' },
+  { id: 'basement_bed',      label: 'Basement Bedroom' },
+  { id: 'finished_basement', label: 'Finished Basement' },
+];
+
+const BONUS_OPTIONS = [
+  { id: 'guest_cottage',  label: 'Standalone Guest Cottage' },
+  { id: 'rv_parking',     label: 'RV Parking' },
+  { id: 'mountain_views', label: 'Mountain Views' },
+  { id: 'shop_outbuilding', label: 'Shop / Outbuilding' },
+  { id: 'acreage_plus',   label: '2+ Acres' },
+  { id: 'single_story',   label: 'Single Story' },
+  { id: 'garage_3plus',   label: '3+ Car Garage' },
+  { id: 'well_septic',    label: 'Well & Septic' },
+];
+
+const DEFAULT_CRITERIA = [
+  { id: 'price',     label: 'Price / Value',            weight: 8 },
+  { id: 'lot',       label: 'Lot Size / Acreage',       weight: 9 },
+  { id: 'location',  label: 'Location (dist. Missoula)',weight: 9 },
+  { id: 'sqft',      label: 'Square Footage',           weight: 7 },
+  { id: 'basement',  label: 'Basement (full suite)',     weight: 10 },
+  { id: 'cottage',   label: 'Guest Cottage',            weight: 7 },
+  { id: 'beds',      label: 'Beds & Baths (main)',      weight: 5 },
+  { id: 'condition', label: 'Condition / Year Built',   weight: 4 },
+  { id: 'garage',    label: 'Garage',                   weight: 3 },
+  { id: 'features',  label: 'Other Features',           weight: 3 },
+];
+
+const DEFAULT_STATE = {
+  priceMin: '600000',
+  priceMax: '1400000',
+  minSqft: '3500',
+  minLot: '1 acre',
+  maxDist: '30 miles',
+  mustHave: ['basement_kitchen','basement_outdoor','basement_family','basement_bath','basement_bed','finished_basement'],
+  bonusWanted: ['guest_cottage'],
+  criteria: DEFAULT_CRITERIA.map(c => ({...c})),
+  customNotes: '',
+  homes: [],
+  activeHomeId: null,
+};
+
+let state = JSON.parse(JSON.stringify(DEFAULT_STATE));
+
+function loadState() {
+  try {
+    const s = localStorage.getItem(STORAGE_KEY);
+    if (s) {
+      const p = JSON.parse(s);
+      state = { ...state, ...p };
+      // ensure new criteria exist
+      DEFAULT_CRITERIA.forEach(dc => {
+        if (!state.criteria.find(c => c.id === dc.id)) state.criteria.push({...dc});
+      });
+    }
+  } catch(e) {}
+}
+
+function saveState() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch(e) {}
+}
+
+loadState();
+renderFilterSummary();
+renderSavedList();
+
+// ── API KEY ────────────────────────────────────────────────────────────
+const API_KEY_STORAGE = 'homeRanker_apiKey';
+
+function getApiKey() {
+  return localStorage.getItem(API_KEY_STORAGE) || '';
+}
+
+function promptForApiKey() {
+  return new Promise((resolve) => {
+    document.getElementById('apiKeyModal').classList.add('open');
+    document.getElementById('apiKeyInput').value = getApiKey();
+    document.getElementById('apiKeySave').onclick = () => {
+      const key = document.getElementById('apiKeyInput').value.trim();
+      if (!key) { alert('Please enter your API key.'); return; }
+      localStorage.setItem(API_KEY_STORAGE, key);
+      document.getElementById('apiKeyModal').classList.remove('open');
+      resolve(key);
+    };
+  });
+}
+
+async function getOrPromptApiKey() {
+  const key = getApiKey();
+  if (key) return key;
+  return await promptForApiKey();
+}
+
+// Show key indicator in header
+function renderKeyStatus() {
+  const el = document.getElementById('keyStatus');
+  if (!el) return;
+  el.textContent = getApiKey() ? '🔑' : '⚠ No API key';
+  el.style.color = getApiKey() ? 'var(--mist)' : 'var(--gold)';
+  el.style.cursor = 'pointer';
+  el.onclick = () => promptForApiKey().then(renderKeyStatus);
+}
+renderKeyStatus();
+
+// ── MODAL ──────────────────────────────────────────────────────────────
+function buildModal() {
+  // Must-have checkboxes
+  document.getElementById('mustHaveGrid').innerHTML = MUST_HAVE_OPTIONS.map(o => `
+    <label class="checkbox-item">
+      <input type="checkbox" data-id="${o.id}" data-group="must" ${state.mustHave.includes(o.id)?'checked':''} />
+      ${o.label}
+    </label>`).join('');
+
+  // Bonus checkboxes
+  document.getElementById('bonusGrid').innerHTML = BONUS_OPTIONS.map(o => `
+    <label class="checkbox-item">
+      <input type="checkbox" data-id="${o.id}" data-group="bonus" ${state.bonusWanted.includes(o.id)?'checked':''} />
+      ${o.label}
+    </label>`).join('');
+
+  // Sliders
+  document.getElementById('criteriaSliders').innerHTML = state.criteria.map(c => `
+    <div class="criterion">
+      <div class="criterion-header">
+        <span class="criterion-name">${c.label}</span>
+        <span class="criterion-value" id="val_${c.id}">${c.weight}</span>
+      </div>
+      <input type="range" min="0" max="10" value="${c.weight}"
+        oninput="document.getElementById('val_${c.id}').textContent=this.value"
+        data-id="${c.id}" />
+      <div class="criterion-bounds"><span>Off</span><span>Max</span></div>
+    </div>`).join('');
+
+  document.getElementById('priceMin').value = state.priceMin || '';
+  document.getElementById('priceMax').value = state.priceMax || '';
+  document.getElementById('minSqft').value = state.minSqft || '';
+  document.getElementById('minLot').value = state.minLot || '';
+  document.getElementById('maxDist').value = state.maxDist || '';
+  document.getElementById('customNotes').value = state.customNotes || '';
+}
+
+function openModal() { buildModal(); document.getElementById('criteriaModal').classList.add('open'); }
+function closeModal() { document.getElementById('criteriaModal').classList.remove('open'); }
+
+function saveModal() {
+  state.priceMin = document.getElementById('priceMin').value.trim();
+  state.priceMax = document.getElementById('priceMax').value.trim();
+  state.minSqft  = document.getElementById('minSqft').value.trim();
+  state.minLot   = document.getElementById('minLot').value.trim();
+  state.maxDist  = document.getElementById('maxDist').value.trim();
+  state.customNotes = document.getElementById('customNotes').value.trim();
+
+  state.mustHave = [...document.querySelectorAll('#mustHaveGrid input[type=checkbox]:checked')].map(el => el.dataset.id);
+  state.bonusWanted = [...document.querySelectorAll('#bonusGrid input[type=checkbox]:checked')].map(el => el.dataset.id);
+
+  document.querySelectorAll('#criteriaSliders input[type=range]').forEach(inp => {
+    const c = state.criteria.find(x => x.id === inp.dataset.id);
+    if (c) c.weight = parseInt(inp.value);
+  });
+
+  saveState();
+  renderFilterSummary();
+  closeModal();
+}
+
+function renderFilterSummary() {
+  const fmtMoney = v => v ? '$' + Number(v.replace(/\D/g,'')).toLocaleString() : '—';
+  const mhLabels = state.mustHave.map(id => {
+    const o = MUST_HAVE_OPTIONS.find(x => x.id === id);
+    return o ? o.label : id;
+  });
+  const bonusLabels = state.bonusWanted.map(id => {
+    const o = BONUS_OPTIONS.find(x => x.id === id);
+    return o ? o.label : id;
+  });
+
+  let html = `
+    <span style="display:block">Price: <strong style="color:var(--pine)">${fmtMoney(state.priceMin)} – ${fmtMoney(state.priceMax)}</strong></span>
+    <span style="display:block">Min sqft: <strong style="color:var(--pine)">${state.minSqft || '—'}</strong></span>
+    <span style="display:block">Min lot: <strong style="color:var(--pine)">${state.minLot || '—'}</strong></span>
+    <span style="display:block">Distance: <strong style="color:var(--pine)">≤ ${state.maxDist || '—'}</strong></span>
+  `;
+  if (mhLabels.length) html += `<span style="display:block;margin-top:4px">Must-haves: <strong style="color:var(--pine)">${mhLabels.length} set</strong></span>`;
+  if (bonusLabels.length) html += `<span style="display:block">Desirables: <strong style="color:var(--gold)">${bonusLabels.length} set</strong></span>`;
+  document.getElementById('filterSummary').innerHTML = html;
+  document.getElementById('filterSummaryDrawer').innerHTML = html;
+}
+
+// ── FETCH / SCRAPE ─────────────────────────────────────────────────────
+async function tryFetchListing(url) {
+  const statusEl = document.getElementById('scrapeStatus');
+
+  // 1. Try allorigins proxy
+  try {
+    statusEl.className = 'scrape-status info';
+    statusEl.textContent = '⟳ Attempting to fetch listing page…';
+    const r = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
+    const d = await r.json();
+    if (d.contents && d.contents.length > 500) {
+      const text = d.contents.replace(/<script[\s\S]*?<\/script>/gi,' ')
+        .replace(/<style[\s\S]*?<\/style>/gi,' ')
+        .replace(/<[^>]+>/g,' ')
+        .replace(/\s+/g,' ').trim().slice(0, 5000);
+      if (text.length > 200) {
+        statusEl.className = 'scrape-status info';
+        statusEl.textContent = '✓ Fetched listing page — combining with any pasted details.';
+        return text;
+      }
+    }
+  } catch(e) {}
+
+  // 2. Use Claude web search as fallback
+  statusEl.className = 'scrape-status warn';
+  statusEl.textContent = '⚠ Direct fetch blocked — Claude will web-search for this listing instead.';
+  return null;
+}
+
+// ── ANALYZE ────────────────────────────────────────────────────────────
+async function analyzeHome() {
+  const url  = document.getElementById('listingUrl').value.trim();
+  const text = document.getElementById('listingText').value.trim();
+  const name = document.getElementById('listingName').value.trim();
+
+  if (!url && !text) { alert('Please provide a URL or paste listing details.'); return; }
+
+  const resultArea = document.getElementById('resultArea');
+  resultArea.innerHTML = `<div class="loading">
+    <div class="spinner"></div>
+    <span>Analyzing listing…</span>
+    <span class="loading-steps" id="loadingStep">Fetching listing data…</span>
+  </div>`;
+
+  // Try to get listing content
+  let fetchedContent = '';
+  if (url) fetchedContent = await tryFetchListing(url) || '';
+
+  document.getElementById('loadingStep').textContent = 'Scoring with Claude…';
+
+  // Build criteria context
+  const total = state.criteria.reduce((s,c) => s + c.weight, 0);
+  const criteriaDesc = state.criteria.filter(c => c.weight > 0)
+    .sort((a,b) => b.weight - a.weight)
+    .map(c => `- ${c.label}: weight ${c.weight}/10 (${Math.round(c.weight/total*100)}% of score)`)
+    .join('\n');
+
+  const mustHaveLabels = state.mustHave.map(id => MUST_HAVE_OPTIONS.find(o=>o.id===id)?.label || id);
+  const bonusLabels = state.bonusWanted.map(id => BONUS_OPTIONS.find(o=>o.id===id)?.label || id);
+
+  const listingInput = [
+    url ? `Listing URL: ${url}` : '',
+    fetchedContent ? `\nFetched page content:\n${fetchedContent}` : '',
+    text ? `\nUser-provided details:\n${text}` : '',
+  ].filter(Boolean).join('\n');
+
+  const prompt = `You are an expert real estate analyst helping a buyer find a home in or near Missoula, Montana.
+
+BUYER REQUIREMENTS:
+- Price range: $${state.priceMin || '600000'} – $${state.priceMax || '1400000'}
+- Minimum square footage: ${state.minSqft || '3500'} sqft
+- Minimum lot size: ${state.minLot || '1 acre'}
+- Must be within ${state.maxDist || '30 miles'} of Missoula, MT
+${mustHaveLabels.length ? `- MUST-HAVE features: ${mustHaveLabels.join(', ')}` : ''}
+${bonusLabels.length ? `- Highly desirable (bonus): ${bonusLabels.join(', ')}` : ''}
+${state.customNotes ? `- Additional notes: ${state.customNotes}` : ''}
+
+SCORING WEIGHTS (each criterion scored 0–10, then weighted):
+${criteriaDesc}
+
+For the "basement" criterion, score based on completeness: 2nd kitchen + direct outdoor access + family room + bathroom + bedroom = full 10. Each missing element deducts ~2 points.
+For "cottage", score 10 if standalone guest cottage present, 0 if absent.
+For "price", score 10 if well under max budget and great value, lower if at/over budget.
+For "location", score 10 if within 10 miles of Missoula downtown, 7 if 10-20mi, 4 if 20-30mi, 1 if over 30mi.
+
+LISTING TO ANALYZE:
+${listingInput}
+
+If the URL was provided but content is thin, use your knowledge of the listing if you recognize it, or note what could not be verified.
+
+Return ONLY valid JSON (no markdown, no preamble, no trailing text):
+{
+  "address": "full address",
+  "price": "$xxx,xxx",
+  "sqft": "x,xxx sqft",
+  "lot": "x.xx acres",
+  "beds": "x bed / x bath",
+  "year": "built xxxx",
+  "overall": 74,
+  "breakdown": {
+    "price": 7,
+    "lot": 6,
+    "location": 8,
+    "sqft": 5,
+    "basement": 9,
+    "cottage": 0,
+    "beds": 7,
+    "condition": 6,
+    "garage": 4,
+    "features": 5
+  },
+  "mustHaveMet": ["basement_kitchen", "basement_bath"],
+  "mustHaveMissing": ["basement_outdoor"],
+  "bonusPresent": ["guest_cottage"],
+  "pros": ["pro 1", "pro 2", "pro 3"],
+  "cons": ["con 1", "con 2"],
+  "summary": "2-3 sentences assessing this home for the buyer."
+}`;
+
+  try {
+    const useWebSearch = !fetchedContent && url;
+
+    const body = {
+      model: 'claude-sonnet-4-6',
+      max_tokens: 1000,
+      messages: [{ role: 'user', content: prompt }],
+    };
+    if (useWebSearch) {
+      body.tools = [{ type: 'web_search_20250305', name: 'web_search' }];
+    }
+
+    const apiKey = await getOrPromptApiKey();
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify(body),
+    });
+
+    const data = await response.json();
+
+    // Extract text from all content blocks (handles web_search tool use)
+    let raw = '';
+    if (Array.isArray(data.content)) {
+      for (const block of data.content) {
+        if (block.type === 'text') raw += block.text;
+      }
+    }
+
+    const clean = raw.replace(/```json|```/g, '').trim();
+    // find JSON object in response
+    const jsonMatch = clean.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('No JSON found in response');
+    const result = JSON.parse(jsonMatch[0]);
+
+    const homeId = Date.now().toString();
+    const home = {
+      id: homeId,
+      name: name || result.address || url || 'Unnamed listing',
+      url: url || '',
+      address: result.address || '',
+      price: result.price || '',
+      sqft: result.sqft || '',
+      lot: result.lot || '',
+      beds: result.beds || '',
+      year: result.year || '',
+      score: result.overall || 0,
+      breakdown: result.breakdown || {},
+      mustHaveMet: result.mustHaveMet || [],
+      mustHaveMissing: result.mustHaveMissing || [],
+      bonusPresent: result.bonusPresent || [],
+      pros: result.pros || [],
+      cons: result.cons || [],
+      summary: result.summary || '',
+      savedAt: new Date().toISOString(),
+    };
+
+    state.homes.unshift(home);
+    state.activeHomeId = homeId;
+    saveState();
+    renderSavedList();
+    renderResult(home, resultArea);
+
+  } catch(e) {
+    resultArea.innerHTML = `<div class="result-card">
+      <p style="color:var(--red);font-weight:600">Error analyzing listing.</p>
+      <p style="font-size:0.8rem;color:var(--ash);margin-top:6px">Please paste the listing details into the text box and try again.<br><code style="font-size:0.75rem">${e.message}</code></p>
+    </div>`;
+  }
+}
+
+// ── RENDER RESULT ──────────────────────────────────────────────────────
+function scoreClass(s) { return s >= 75 ? 'score-high' : s >= 55 ? 'score-mid' : 'score-low'; }
+function pillClass(s)  { return s >= 7  ? 'score-high' : s >= 5  ? 'score-mid' : 'score-low'; }
+
+function renderResult(home, container) {
+  const sc = scoreClass(home.score);
+
+  // Criteria bars
+  const bars = state.criteria.filter(c => c.weight > 0).map(c => {
+    const val = home.breakdown[c.id] ?? 0;
+    const pct = val * 10;
+    const color = pct >= 70 ? 'var(--pine)' : pct >= 45 ? 'var(--gold)' : 'var(--red)';
+    return `<div class="bar-row">
+      <span class="bar-label">${c.label}</span>
+      <div class="bar-track"><div class="bar-fill" style="background:${color}" data-pct="${pct}"></div></div>
+      <span class="bar-num">${val}/10</span>
+    </div>`;
+  }).join('');
+
+  // Must-have flags
+  const metLabels   = home.mustHaveMet.map(id => MUST_HAVE_OPTIONS.find(o=>o.id===id)?.label || id);
+  const missLabels  = home.mustHaveMissing.map(id => MUST_HAVE_OPTIONS.find(o=>o.id===id)?.label || id);
+  const bonusLabels = home.bonusPresent.map(id => BONUS_OPTIONS.find(o=>o.id===id)?.label || id);
+
+  const flags = [
+    ...metLabels.map(l => `<span class="flag flag-meet">✓ ${l}</span>`),
+    ...missLabels.map(l => `<span class="flag flag-miss">✗ ${l}</span>`),
+    ...bonusLabels.map(l => `<span class="flag flag-bonus">★ ${l}</span>`),
+  ].join('');
+
+  const pros = home.pros.map(p => `<li>${p}</li>`).join('');
+  const cons = home.cons.map(c => `<li>${c}</li>`).join('');
+
+  const metaLine = [home.price, home.sqft, home.lot, home.beds, home.year].filter(Boolean).join(' · ');
+
+  container.innerHTML = `<div class="result-card">
+    <div class="result-header">
+      <div>
+        <div class="result-title">${home.name}</div>
+        <div class="result-meta">${home.address}</div>
+        ${metaLine ? `<div class="result-meta" style="margin-top:2px">${metaLine}</div>` : ''}
+      </div>
+      <div class="score-badge ${sc}">
+        <span class="num">${home.score}</span>
+        <span class="lbl">/ 100</span>
+      </div>
+    </div>
+
+    ${flags ? `<div class="flags-row">${flags}</div>` : ''}
+
+    <div class="score-bars">${bars}</div>
+
+    <div class="pros-cons">
+      <div class="pros"><h4>✓ Pros</h4><ul>${pros}</ul></div>
+      <div class="cons"><h4>✗ Cons</h4><ul>${cons}</ul></div>
+    </div>
+
+    <div class="summary-text">${home.summary}</div>
+
+    <div class="result-actions">
+      <button class="btn btn-danger btn-sm" onclick="deleteHome('${home.id}')">Remove listing</button>
+      ${home.url ? `<a href="${home.url}" target="_blank">↗ View original listing</a>` : ''}
+    </div>
+  </div>`;
+
+  // Animate bars after paint
+  requestAnimationFrame(() => {
+    setTimeout(() => {
+      container.querySelectorAll('.bar-fill').forEach(el => {
+        el.style.width = el.dataset.pct + '%';
+      });
+    }, 60);
+  });
+}
+
+// ── DRAWER ─────────────────────────────────────────────────────────────
+function openDrawer() {
+  document.getElementById('drawer').classList.add('open');
+  document.getElementById('drawerOverlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeDrawer() {
+  document.getElementById('drawer').classList.remove('open');
+  document.getElementById('drawerOverlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+// ── SAVED LIST ─────────────────────────────────────────────────────────
+function renderSavedList() {
+  const el = document.getElementById('savedList');
+  const elD = document.getElementById('savedListDrawer');
+  document.getElementById('savedCount').textContent = state.homes.length;
+  document.getElementById('savedCountDrawer').textContent = state.homes.length;
+  document.getElementById('compareCount').textContent = state.homes.length;
+
+  if (!state.homes.length) {
+    const empty = `<div class="empty-state">No listings yet.<br>Analyze a home to start ranking.</div>`;
+    el.innerHTML = empty;
+    elD.innerHTML = empty;
+    return;
+  }
+
+  const sorted = [...state.homes].sort((a,b) => b.score - a.score);
+  const html = sorted.map((h, i) => {
+    const sc = scoreClass(h.score);
+    const active = h.id === state.activeHomeId ? 'active' : '';
+    return `<div class="saved-item ${active}" onclick="viewHome('${h.id}')">
+      <div class="saved-item-name">#${i+1} ${h.name}</div>
+      <div class="saved-item-meta">${h.address || 'No address'}</div>
+      <span class="saved-item-score ${sc}">${h.score}/100</span>
+    </div>`;
+  }).join('');
+  el.innerHTML = html;
+  elD.innerHTML = html;
+}
+
+function viewHome(id) {
+  const home = state.homes.find(h => h.id === id);
+  if (!home) return;
+  state.activeHomeId = id;
+  showTab('analyze');
+  document.getElementById('scrapeStatus').className = 'scrape-status';
+  renderResult(home, document.getElementById('resultArea'));
+  renderSavedList();
+  closeDrawer();
+}
+
+function deleteHome(id) {
+  if (!confirm('Remove this listing?')) return;
+  state.homes = state.homes.filter(h => h.id !== id);
+  if (state.activeHomeId === id) state.activeHomeId = null;
+  saveState();
+  renderSavedList();
+  if (state.homes.length) viewHome(state.homes[0].id);
+  else document.getElementById('resultArea').innerHTML = '';
+}
+
+// ── COMPARE ────────────────────────────────────────────────────────────
+function renderCompare() {
+  const area = document.getElementById('compareArea');
+  if (state.homes.length < 2) {
+    area.innerHTML = `<div class="empty-state" style="padding:48px;text-align:center;">Save two or more homes to compare.</div>`;
+    return;
+  }
+  const sorted = [...state.homes].sort((a,b) => b.score - a.score);
+  const activeCriteria = state.criteria.filter(c => c.weight > 0);
+
+  const headerCols = activeCriteria.map(c => `<th>${c.label}</th>`).join('');
+  const rows = sorted.map((h, i) => {
+    const sc = scoreClass(h.score);
+    const cells = activeCriteria.map(c => {
+      const v = h.breakdown[c.id];
+      if (v == null) return `<td style="color:var(--ash)">—</td>`;
+      const pc = pillClass(v);
+      return `<td><span class="score-pill ${pc}">${v}</span></td>`;
+    }).join('');
+    return `<tr>
+      <td><span class="rank-num">#${i+1}</span></td>
+      <td style="white-space:normal;min-width:150px"><strong style="font-size:0.8rem">${h.name}</strong><br>
+        <span style="font-size:0.7rem;color:var(--ash)">${h.price || ''} · ${h.sqft || ''}</span></td>
+      <td><span class="score-pill ${sc}">${h.score}</span></td>
+      ${cells}
+      <td><button class="btn btn-danger btn-sm" onclick="deleteHome('${h.id}')">✕</button></td>
+    </tr>`;
+  }).join('');
+
+  area.innerHTML = `<div class="result-card"><div class="compare-wrap">
+    <table class="compare-table">
+      <thead><tr><th>#</th><th>Home</th><th>Score</th>${headerCols}<th></th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div></div>`;
+}
+
+// ── TABS ───────────────────────────────────────────────────────────────
+function showTab(tab) {
+  document.getElementById('panel-analyze').style.display = tab === 'analyze' ? 'block' : 'none';
+  document.getElementById('panel-compare').style.display = tab === 'compare' ? 'block' : 'none';
+  document.getElementById('tab-analyze').classList.toggle('active', tab === 'analyze');
+  document.getElementById('tab-compare').classList.toggle('active', tab === 'compare');
+  if (tab === 'compare') renderCompare();
+}
+</script>
+</body>
+</html>
