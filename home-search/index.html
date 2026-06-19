@@ -202,6 +202,20 @@
   .corrections-hint { font-size: 0.72rem; color: var(--ash); margin-bottom: 10px; }
   .corrections-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   @media (max-width: 680px) { .corrections-grid { grid-template-columns: 1fr; } }
+  .status-banner {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 14px; border-radius: 8px; margin-bottom: 16px;
+    font-weight: 700; font-size: 0.85rem; letter-spacing: 0.02em;
+  }
+  .status-banner.danger {
+    background: #fde8e5; color: var(--red); border: 1.5px solid var(--red);
+  }
+  .status-icon { font-size: 1.1rem; }
+  .saved-item-status {
+    display: inline-block; margin-top: 4px; margin-left: 6px;
+    font-size: 0.68rem; font-weight: 700; padding: 1px 6px; border-radius: 4px;
+    background: var(--red); color: white; letter-spacing: 0.03em;
+  }
   .compare-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; white-space: nowrap; }
   .compare-table th { text-align: left; padding: 8px 10px; background: var(--paper); font-weight: 600; color: var(--ash); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; }
   .compare-table td { padding: 9px 10px; border-bottom: 1px solid #e0ddd7; vertical-align: middle; }
@@ -729,6 +743,7 @@ Find: address, price, square footage, lot size, beds/baths, year built, basement
       lot: result.lot || '',
       beds: result.beds || '',
       year: result.year || '',
+      listingStatus: result.listingStatus || 'active',
       score: result.overall || 0,
       breakdown: result.breakdown || {},
       mustHaveMet: result.mustHaveMet || [],
@@ -757,6 +772,29 @@ Find: address, price, square footage, lot size, beds/baths, year built, basement
 // ── RENDER RESULT ──────────────────────────────────────────────────────
 function scoreClass(s) { return s >= 75 ? 'score-high' : s >= 55 ? 'score-mid' : 'score-low'; }
 function pillClass(s)  { return s >= 7  ? 'score-high' : s >= 5  ? 'score-mid' : 'score-low'; }
+
+const STATUS_LABELS = {
+  pending: '⚠ PENDING — Offer Accepted',
+  under_contract: '⚠ UNDER CONTRACT',
+  contingent: '⚠ CONTINGENT',
+  sold: '✕ SOLD — No Longer Available',
+  off_market: '✕ OFF MARKET',
+};
+
+function renderStatusBanner(status) {
+  if (!status || status === 'active') return '';
+  const label = STATUS_LABELS[status] || `⚠ ${status.toUpperCase()}`;
+  return `<div class="status-banner danger"><span class="status-icon">🚩</span>${label}</div>`;
+}
+
+function statusBadgeShort(status) {
+  if (!status || status === 'active') return '';
+  const shortLabels = {
+    pending: 'PENDING', under_contract: 'CONTRACT', contingent: 'CONTINGENT',
+    sold: 'SOLD', off_market: 'OFF MKT',
+  };
+  return `<span class="saved-item-status">${shortLabels[status] || status.toUpperCase()}</span>`;
+}
 
 function renderResult(home, container) {
   const sc = scoreClass(home.score);
@@ -788,8 +826,10 @@ function renderResult(home, container) {
   const cons = home.cons.map(c => `<li>${c}</li>`).join('');
 
   const metaLine = [home.price, home.sqft, home.lot, home.beds, home.year].filter(Boolean).join(' · ');
+  const statusBanner = renderStatusBanner(home.listingStatus);
 
   container.innerHTML = `<div class="result-card">
+    ${statusBanner}
     <div class="result-header">
       <div>
         <div class="result-title">${home.name}</div>
@@ -834,6 +874,18 @@ function renderResult(home, container) {
           <label>Beds / Baths</label>
           <input type="text" id="cor_beds_${home.id}" placeholder="${home.beds || 'e.g. 9 bed / 8.5 bath'}" />
         </div>
+        <div class="field-group">
+          <label>Listing Status</label>
+          <select id="cor_status_${home.id}" style="padding:7px 10px;border:1px solid #d4d1cb;border-radius:6px;font-family:Inter,sans-serif;font-size:0.82rem;color:var(--ink);background:var(--paper);">
+            <option value="">Keep current</option>
+            <option value="active">Active</option>
+            <option value="pending">Pending</option>
+            <option value="under_contract">Under Contract</option>
+            <option value="contingent">Contingent</option>
+            <option value="sold">Sold</option>
+            <option value="off_market">Off Market</option>
+          </select>
+        </div>
       </div>
       <div class="field-group" style="margin-top:8px">
         <label>Additional corrections / notes for Claude</label>
@@ -869,11 +921,19 @@ async function reAnalyze(id) {
   const home = state.homes.find(h => h.id === id);
   if (!home) return;
 
-  const corPrice = document.getElementById(`cor_price_${id}`)?.value.trim();
-  const corSqft  = document.getElementById(`cor_sqft_${id}`)?.value.trim();
-  const corLot   = document.getElementById(`cor_lot_${id}`)?.value.trim();
-  const corBeds  = document.getElementById(`cor_beds_${id}`)?.value.trim();
-  const corNotes = document.getElementById(`cor_notes_${id}`)?.value.trim();
+  const corPrice  = document.getElementById(`cor_price_${id}`)?.value.trim();
+  const corSqft   = document.getElementById(`cor_sqft_${id}`)?.value.trim();
+  const corLot    = document.getElementById(`cor_lot_${id}`)?.value.trim();
+  const corBeds   = document.getElementById(`cor_beds_${id}`)?.value.trim();
+  const corNotes  = document.getElementById(`cor_notes_${id}`)?.value.trim();
+  const corStatus = document.getElementById(`cor_status_${id}`)?.value.trim();
+
+  // Apply manual status override immediately, no API call needed
+  if (corStatus) {
+    home.listingStatus = corStatus;
+    saveState();
+    renderSavedList();
+  }
 
   const corrections = [
     corPrice ? `Price: ${corPrice}` : '',
@@ -883,7 +943,14 @@ async function reAnalyze(id) {
     corNotes ? `Additional info: ${corNotes}` : '',
   ].filter(Boolean).join('\n');
 
-  if (!corrections) { alert('Enter at least one correction first.'); return; }
+  if (!corrections) {
+    if (corStatus) {
+      renderResult(home, document.getElementById('resultArea'));
+      return;
+    }
+    alert('Enter at least one correction first.');
+    return;
+  }
 
   const resultArea = document.getElementById('resultArea');
   resultArea.innerHTML = `<div class="loading"><div class="spinner"></div><span>Re-scoring with corrections…</span></div>`;
@@ -944,6 +1011,7 @@ ${corrections}`;
     home.pros = result.pros || home.pros;
     home.cons = result.cons || home.cons;
     home.summary = result.summary || home.summary;
+    home.listingStatus = result.listingStatus || home.listingStatus || 'active';
     if (corPrice) home.price = corPrice;
     if (corSqft)  home.sqft  = corSqft;
     if (corLot)   home.lot   = corLot;
@@ -981,6 +1049,8 @@ For "cottage": score 10 if standalone guest cottage present, 0 if absent.
 For "price": score 10 if well under max budget, lower if at/over budget.
 For "location": score 10 if within 10 miles of Missoula, 7 if 10-20mi, 4 if 20-30mi, 1 if over 30mi.
 
+CRITICAL: Check the listing status carefully. Look for any indication the home is "Pending", "Under Contract", "Contingent", "Sold", or "Off Market". This is extremely important to flag.
+
 Return ONLY valid JSON (no markdown, no preamble):
 {
   "address": "full address",
@@ -989,6 +1059,7 @@ Return ONLY valid JSON (no markdown, no preamble):
   "lot": "x.xx acres",
   "beds": "x bed / x bath",
   "year": "built xxxx",
+  "listingStatus": "active",
   "overall": 74,
   "breakdown": {"price":7,"lot":6,"location":8,"sqft":5,"basement":9,"cottage":0,"beds":7,"condition":6,"garage":4,"features":5},
   "mustHaveMet": ["basement_kitchen"],
@@ -997,7 +1068,9 @@ Return ONLY valid JSON (no markdown, no preamble):
   "pros": ["pro 1","pro 2","pro 3"],
   "cons": ["con 1","con 2"],
   "summary": "2-3 sentence assessment."
-}`;
+}
+
+For "listingStatus", use exactly one of: "active", "pending", "under_contract", "contingent", "sold", "off_market". Default to "active" only if there is no indication otherwise.`;
 }
 function openDrawer() {
   document.getElementById('drawer').classList.add('open');
@@ -1032,7 +1105,7 @@ function renderSavedList() {
     return `<div class="saved-item ${active}" onclick="viewHome('${h.id}')">
       <div class="saved-item-name">#${i+1} ${h.name}</div>
       <div class="saved-item-meta">${h.address || 'No address'}</div>
-      <span class="saved-item-score ${sc}">${h.score}/100</span>
+      <span class="saved-item-score ${sc}">${h.score}/100</span>${statusBadgeShort(h.listingStatus)}
     </div>`;
   }).join('');
   el.innerHTML = html;
@@ -1081,7 +1154,7 @@ function renderCompare() {
     }).join('');
     return `<tr>
       <td><span class="rank-num">#${i+1}</span></td>
-      <td style="white-space:normal;min-width:150px"><strong style="font-size:0.8rem">${h.name}</strong><br>
+      <td style="white-space:normal;min-width:150px"><strong style="font-size:0.8rem">${h.name}</strong>${statusBadgeShort(h.listingStatus)}<br>
         <span style="font-size:0.7rem;color:var(--ash)">${h.price || ''} · ${h.sqft || ''}</span></td>
       <td><span class="score-pill ${sc}">${h.score}</span></td>
       ${cells}
